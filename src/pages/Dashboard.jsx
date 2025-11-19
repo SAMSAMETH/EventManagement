@@ -1,9 +1,24 @@
-// Dashboard.jsx
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabase/supabaseClient";
 import { useAuth } from "../Auth/AuthContext";
-import { motion } from "framer-motion";
-import { ArrowLeft, Calendar, DollarSign, Package, MapPin, User, IndianRupee } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  ArrowLeft,
+  Calendar,
+  Package,
+  MapPin,
+  User,
+  IndianRupee,
+  CreditCard,
+  FileText,
+  CheckCircle2,
+  Clock,
+  XCircle,
+  ChevronDown,
+  Search,
+  Filter,
+  Download
+} from "lucide-react";
 
 const PACKAGE_PRICES = {
   Standard: 5000,
@@ -13,10 +28,11 @@ const PACKAGE_PRICES = {
 
 export default function Dashboard() {
   const { user } = useAuth();
-
   const [bookings, setBookings] = useState([]);
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activeFilter, setActiveFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     if (user) fetchBookings();
@@ -24,21 +40,13 @@ export default function Dashboard() {
 
   const fetchBookings = async () => {
     setLoading(true);
-
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("bookings")
       .select("*")
       .eq("user_id", user.id)
       .order("event_date", { ascending: false });
-
-    if (!error && data) {
-      setBookings(data);
-      await fetchPayments(data);
-    } else {
-      setBookings([]);
-      setPayments([]);
-    }
-
+    setBookings(data || []);
+    await fetchPayments(data || []);
     setLoading(false);
   };
 
@@ -47,34 +55,67 @@ export default function Dashboard() {
       setPayments([]);
       return;
     }
-
     const ids = bookingList.map((b) => b.id);
-
     const { data } = await supabase
       .from("payments")
       .select("*")
       .in("booking_id", ids)
       .order("created_at", { ascending: true });
-
     setPayments(data || []);
   };
 
   const paymentSummary = (bookingId, pkg) => {
     const list = payments.filter((p) => p.booking_id === bookingId);
-
     const totalPaid = list.reduce((sum, p) => sum + p.amount, 0);
     const totalAmount = PACKAGE_PRICES[pkg];
     const remaining = totalAmount - totalPaid;
-
     return { list, totalPaid, totalAmount, remaining };
   };
 
+  const cancelBooking = async (id) => {
+    const confirmCancel = window.confirm(
+      "Are you sure you want to cancel this booking?"
+    );
+    if (!confirmCancel) return;
+
+    const { error } = await supabase
+      .from("bookings")
+      .update({ status: "cancelled" })
+      .eq("id", id);
+
+    if (error) {
+      alert("Failed to cancel booking");
+      return;
+    }
+    alert("Booking cancelled successfully");
+    fetchBookings();
+  };
+
+  // Filter bookings based on active filter and search
+  const filteredBookings = useMemo(() => {
+    return bookings.filter(booking => {
+      const matchesSearch = booking.event_type?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                           booking.name?.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      if (activeFilter === "all") return matchesSearch;
+      if (activeFilter === "active") return matchesSearch && booking.status !== "cancelled";
+      if (activeFilter === "cancelled") return matchesSearch && booking.status === "cancelled";
+      
+      const s = paymentSummary(booking.id, booking.package);
+      if (activeFilter === "paid") return matchesSearch && s.remaining <= 0 && booking.status !== "cancelled";
+      if (activeFilter === "pending") return matchesSearch && s.remaining > 0 && booking.status !== "cancelled";
+      
+      return matchesSearch;
+    });
+  }, [bookings, activeFilter, searchQuery, payments]);
+
   const stats = useMemo(() => {
-    let total = bookings.length;
+    const active = bookings.filter((b) => b.status !== "cancelled");
+    let total = active.length;
     let fullyPaid = 0;
     let pending = 0;
 
-    bookings.forEach((b) => {
+    active.forEach((b) => {
       const s = paymentSummary(b.id, b.package);
       if (s.remaining <= 0) fullyPaid++;
       else pending++;
@@ -83,303 +124,379 @@ export default function Dashboard() {
     return { total, fullyPaid, pending };
   }, [bookings, payments]);
 
-  // Cancel Booking
-  const cancelBooking = async (id) => {
-    if (!window.confirm("Are you sure you want to cancel this booking?")) return;
-
-    const { error } = await supabase.from("bookings").delete().eq("id", id);
-
-    if (error) return alert("Failed to cancel booking");
-
-    alert("Booking cancelled successfully");
-    fetchBookings();
-  };
-
-  const statusTag = (remaining) =>
-    remaining <= 0 ? (
-      <span className="px-3 py-1.5 text-xs rounded-full bg-gradient-to-r from-emerald-500 to-green-500 text-white font-semibold shadow-sm flex items-center gap-1">
-        <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
-        Fully Paid
-      </span>
-    ) : (
-      <span className="px-3 py-1.5 text-xs rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold shadow-sm flex items-center gap-1">
-        <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
-        Partially Paid
-      </span>
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading your bookings...</p>
+        </div>
+      </div>
     );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 px-4 pt-4 pb-10">
-      <div className="max-w-7xl mx-auto">
-        
-        {/* Header with Back Button - Fixed spacing */}
-        <div className="mb-8 pt-10"> {/* Added pt-4 for top padding */}
-          <div className="flex items-center gap-4 mb-6">
-            <motion.button
-              onClick={() => window.history.back()}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="p-2.5 rounded-xl bg-white/80 backdrop-blur-sm border border-slate-200 shadow-sm hover:shadow-md transition-all duration-200 text-slate-700 hover:text-indigo-600"
-              aria-label="Go back"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </motion.button>
-            <div className="flex-1 min-w-0"> {/* Added min-w-0 to prevent text overflow */}
-              <h1 className="text-sm text-slate-600 mt-3 break-words">
-                Manage your bookings and payments
-              </h1>
-              
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-6">
+            <div className="flex items-center space-x-4">
+              <motion.button
+                onClick={() => window.history.back()}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="p-2 rounded-lg bg-white border border-gray-300 shadow-sm hover:shadow-md transition-shadow"
+              >
+                <ArrowLeft className="w-5 h-5 text-gray-600" />
+              </motion.button>
+              <div className="mt-10">
+                <h1 className="text-2xl font-bold text-gray-900">My Bookings</h1>
+                <p className="text-gray-600">Manage your events and payments</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-3">
+              <button className="flex items-center px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-700 hover:bg-gray-50 transition-colors">
+                <Download className="w-4 h-4 mr-2" />
+                Export
+              </button>
             </div>
           </div>
+        </div>
+      </div>
 
-          {/* Quick Stats - Mobile First with better spacing */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="bg-white/90 backdrop-blur-sm border border-slate-200 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300"
-            >
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
-                  <Calendar className="w-4 h-4" />
-                </div>
-                <span className="text-sm font-medium text-slate-600">Total Bookings</span>
-              </div>
-              <p className="text-3xl font-bold text-slate-800">{stats.total}</p>
-            </motion.div>
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* User-focused Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <StatCard
+            title="Total Bookings"
+            value={stats.total}
+            description="Active bookings"
+            icon={<FileText className="w-6 h-6" />}
+            color="blue"
+          />
+          <StatCard
+            title="Completed Payments"
+            value={stats.fullyPaid}
+            description="Fully paid bookings"
+            icon={<CheckCircle2 className="w-6 h-6" />}
+            color="green"
+          />
+          <StatCard
+            title="Pending Payments"
+            value={stats.pending}
+            description="Require attention"
+            icon={<Clock className="w-6 h-6" />}
+            color="amber"
+          />
+        </div>
 
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="bg-white/90 backdrop-blur-sm border border-slate-200 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300"
-            >
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 rounded-lg bg-emerald-100 text-emerald-600">
-                  <IndianRupee className="w-4 h-4" /> {/* Changed to IndianRupee icon */}
-                </div>
-                <span className="text-sm font-medium text-slate-600">Fully Paid</span>
-              </div>
-              <p className="text-3xl font-bold text-emerald-600">{stats.fullyPaid}</p>
-            </motion.div>
-
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="bg-white/90 backdrop-blur-sm border border-slate-200 rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300"
-            >
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 rounded-lg bg-amber-100 text-amber-600">
-                  <Package className="w-4 h-4" />
-                </div>
-                <span className="text-sm font-medium text-slate-600">Pending</span>
-              </div>
-              <p className="text-3xl font-bold text-amber-600">{stats.pending}</p>
-            </motion.div>
+        {/* Filters and Search */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: "all", label: "All Bookings" },
+                { key: "active", label: "Active" },
+                { key: "pending", label: "Pending Payment" },
+                { key: "paid", label: "Paid" },
+                { key: "cancelled", label: "Cancelled" }
+              ].map((filter) => (
+                <button
+                  key={filter.key}
+                  onClick={() => setActiveFilter(filter.key)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    activeFilter === filter.key
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search my bookings..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
           </div>
         </div>
 
         {/* Bookings List */}
-        <div className="space-y-6">
-          {loading ? (
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="bg-white/90 backdrop-blur-sm border border-slate-200 rounded-2xl p-8 text-center shadow-lg"
-            >
-              <div className="animate-pulse flex flex-col items-center">
-                <div className="w-12 h-12 bg-slate-200 rounded-full mb-4"></div>
-                <div className="h-4 bg-slate-200 rounded w-32 mb-2"></div>
-                <div className="h-3 bg-slate-200 rounded w-24"></div>
-              </div>
-            </motion.div>
-          ) : bookings.length === 0 ? (
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white/90 backdrop-blur-sm border border-slate-200 rounded-2xl p-8 text-center shadow-lg"
-            >
-              <div className="max-w-sm mx-auto">
-                <Calendar className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-slate-700 mb-2">No bookings found</h3>
-                <p className="text-slate-500 text-sm mb-6">Your event bookings will appear here once you make a reservation.</p>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => window.location.href = "/book-demo"}
-                  className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
-                >
-                  Book Demo
-                </motion.button>
-              </div>
-            </motion.div>
-          ) : (
-            bookings.map((booking) => {
+        <div className="space-y-4">
+          <AnimatePresence>
+            {filteredBookings.map((booking) => {
               const s = paymentSummary(booking.id, booking.package);
-
               return (
-                <motion.div
+                <BookingCard
                   key={booking.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-white/90 backdrop-blur-sm border border-slate-200 rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300"
-                >
-                  <div className="p-6 sm:p-8">
-                    <div className="flex flex-col lg:flex-row gap-6">
-                      {/* LEFT - Booking Details */}
-                      <div className="flex-1 min-w-0"> {/* Added min-w-0 to prevent overflow */}
-                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
-                          <div className="min-w-0 flex-1"> {/* Added min-w-0 and flex-1 */}
-                            <h3 className="text-xl font-bold text-slate-800 mb-2 break-words">
-                              {booking.event_type}
-                            </h3>
-                            {/* Removed ID display as requested */}
-                          </div>
-                          <div className="flex-shrink-0"> {/* Prevent status tag from shrinking */}
-                            {statusTag(s.remaining)}
-                          </div>
-                        </div>
-
-                        {/* Booking Info Grid */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-                          <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
-                            <User className="w-4 h-4 text-slate-600 flex-shrink-0" />
-                            <div className="min-w-0">
-                              <p className="text-xs text-slate-500">Customer</p>
-                              <p className="font-semibold text-slate-800 truncate">{booking.name}</p>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
-                            <Package className="w-4 h-4 text-slate-600 flex-shrink-0" />
-                            <div className="min-w-0">
-                              <p className="text-xs text-slate-500">Package</p>
-                              <p className="font-semibold text-slate-800 truncate">
-                                {booking.package} (<IndianRupee className="inline w-3 h-3" />{s.totalAmount})
-                              </p>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
-                            <Calendar className="w-4 h-4 text-slate-600 flex-shrink-0" />
-                            <div className="min-w-0">
-                              <p className="text-xs text-slate-500">Event Date</p>
-                              <p className="font-semibold text-slate-800">{booking.event_date}</p>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
-                            <MapPin className="w-4 h-4 text-slate-600 flex-shrink-0" />
-                            <div className="min-w-0">
-                              <p className="text-xs text-slate-500">Location</p>
-                              <p className="font-semibold text-slate-800 truncate">{booking.location}</p>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Payment Summary */}
-                        <div className="bg-gradient-to-r from-slate-50 to-blue-50 border border-slate-200 rounded-xl p-4">
-                          <h4 className="font-semibold text-slate-800 mb-3">Payment Summary</h4>
-                          <div className="space-y-2">
-                            <div className="flex justify-between items-center">
-                              <span className="text-sm text-slate-600">Total Amount:</span>
-                              <span className="font-bold text-slate-800 flex items-center gap-1">
-                                <IndianRupee className="w-3 h-3" />
-                                {s.totalAmount}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-sm text-slate-600">Total Paid:</span>
-                              <span className="font-bold text-emerald-600 flex items-center gap-1">
-                                <IndianRupee className="w-3 h-3" />
-                                {s.totalPaid}
-                              </span>
-                            </div>
-                            {s.remaining > 0 ? (
-                              <div className="flex justify-between items-center pt-2 border-t border-slate-200">
-                                <span className="text-sm font-semibold text-slate-700">Remaining Balance:</span>
-                                <span className="font-bold text-amber-600 flex items-center gap-1">
-                                  <IndianRupee className="w-3 h-3" />
-                                  {s.remaining}
-                                </span>
-                              </div>
-                            ) : (
-                              <div className="flex justify-between items-center pt-2 border-t border-slate-200">
-                                <span className="text-sm font-semibold text-slate-700">Status:</span>
-                                <span className="font-bold text-emerald-600">Payment Completed</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* RIGHT - Actions & History */}
-                      <div className="w-full lg:w-80 flex flex-col gap-4">
-                        {/* Action Buttons */}
-                        <div className="space-y-3">
-                          {s.remaining > 0 && (
-                            <motion.button
-                              whileHover={{ scale: 1.02 }}
-                              whileTap={{ scale: 0.98 }}
-                              onClick={() =>
-                                (window.location.href = `/payments?amount=${s.remaining}&booking_id=${booking.id}`)
-                              }
-                              className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3.5 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2"
-                            >
-                              <IndianRupee className="w-4 h-4" />
-                              Pay Remaining {s.remaining}
-                            </motion.button>
-                          )}
-
-                          <motion.button
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={() => cancelBooking(booking.id)}
-                            className="w-full bg-gradient-to-r from-rose-500 to-pink-600 text-white py-3.5 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
-                          >
-                            Cancel Booking
-                          </motion.button>
-                        </div>
-
-                        {/* Payment History */}
-                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex-1">
-                          <h4 className="font-semibold text-slate-800 text-sm mb-3 flex items-center gap-2">
-                            <IndianRupee className="w-4 h-4" />
-                            Payment History
-                          </h4>
-
-                          {s.list.length === 0 ? (
-                            <p className="text-xs text-slate-500 text-center py-4">No payments recorded yet</p>
-                          ) : (
-                            <div className="space-y-2 max-h-40 overflow-y-auto">
-                              {s.list.map((p) => (
-                                <div key={p.id} className="flex justify-between items-center p-2 bg-white rounded-lg border border-slate-200">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                                    <span className="font-semibold text-slate-800 flex items-center gap-1">
-                                      <IndianRupee className="w-3 h-3" />
-                                      {p.amount}
-                                    </span>
-                                  </div>
-                                  <span className="text-xs text-slate-500">
-                                    {new Date(p.created_at).toLocaleDateString()}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
+                  booking={booking}
+                  paymentSummary={s}
+                  onCancel={cancelBooking}
+                />
               );
-            })
+            })}
+          </AnimatePresence>
+
+          {filteredBookings.length === 0 && (
+            <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+              <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No bookings found</h3>
+              <p className="text-gray-600 mb-4">Try adjusting your search or filters</p>
+              <button 
+                onClick={() => { setActiveFilter("all"); setSearchQuery(""); }}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                View All Bookings
+              </button>
+            </div>
           )}
         </div>
       </div>
     </div>
   );
 }
+
+/* ---------------------- SUB COMPONENTS ---------------------- */
+
+function StatCard({ title, value, description, icon, color }) {
+  const colorClasses = {
+    blue: "bg-blue-50 text-blue-600 border-blue-200",
+    green: "bg-green-50 text-green-600 border-green-200",
+    amber: "bg-amber-50 text-amber-600 border-amber-200",
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`p-6 rounded-xl border-2 ${colorClasses[color]} transition-all hover:scale-105 cursor-pointer`}
+    >
+      <div className="flex justify-between items-start">
+        <div>
+          <p className="text-sm font-medium opacity-75">{title}</p>
+          <p className="text-2xl font-bold mt-1">{value}</p>
+          <p className="text-xs opacity-75 mt-2">{description}</p>
+        </div>
+        <div className={`p-2 rounded-lg ${colorClasses[color]} bg-opacity-50`}>
+          {icon}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function BookingCard({ booking, paymentSummary: s, onCancel }) {
+  const [showDetails, setShowDetails] = useState(false);
+
+  const getStatusConfig = (status, remaining) => {
+    if (status === "cancelled") {
+      return { 
+        color: "red", 
+        text: "Cancelled", 
+        icon: XCircle,
+        bgColor: "bg-red-100",
+        textColor: "text-red-800"
+      };
+    }
+    if (remaining <= 0) {
+      return { 
+        color: "green", 
+        text: "Fully Paid", 
+        icon: CheckCircle2,
+        bgColor: "bg-green-100",
+        textColor: "text-green-800"
+      };
+    }
+    return { 
+      color: "amber", 
+      text: "Payment Pending", 
+      icon: Clock,
+      bgColor: "bg-amber-100",
+      textColor: "text-amber-800"
+    };
+  };
+
+  const statusConfig = getStatusConfig(booking.status, s.remaining);
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
+    >
+      {/* Card Header */}
+      <div className="p-6">
+        <div className="flex justify-between items-start mb-4">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-2">
+              <h3 className="text-lg font-semibold text-gray-900">{booking.event_type}</h3>
+              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${statusConfig.bgColor} ${statusConfig.textColor}`}>
+                <statusConfig.icon className="w-3 h-3 mr-1" />
+                {statusConfig.text}
+              </span>
+            </div>
+            <p className="text-gray-600">Booking ID: {booking.id}</p>
+          </div>
+          <button 
+            onClick={() => setShowDetails(!showDetails)}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${showDetails ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
+
+        {/* Quick Info Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          <InfoItem icon={User} label="Customer" value={booking.name} />
+          <InfoItem icon={Package} label="Package" value={booking.package} />
+          <InfoItem icon={Calendar} label="Event Date" value={booking.event_date} />
+          <InfoItem icon={MapPin} label="Location" value={booking.location} />
+        </div>
+
+        {/* Payment Progress */}
+        {booking.status !== "cancelled" && (
+          <div className="mb-4">
+            <div className="flex justify-between text-sm text-gray-600 mb-2">
+              <span>Payment Progress</span>
+              <span>₹{s.totalPaid} of ₹{s.totalAmount}</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-green-600 h-2 rounded-full transition-all duration-500"
+                style={{ width: `${(s.totalPaid / s.totalAmount) * 100}%` }}
+              ></div>
+            </div>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="flex gap-3">
+          {booking.status !== "cancelled" && s.remaining > 0 && (
+            <button
+              onClick={() => window.location.href = `/payments?amount=${s.remaining}&booking_id=${booking.id}`}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+            >
+              <CreditCard className="w-4 h-4" />
+              Pay ₹{s.remaining}
+            </button>
+          )}
+          {booking.status !== "cancelled" && (
+            <button
+              onClick={() => onCancel(booking.id)}
+              className="px-6 py-3 border border-red-300 text-red-700 hover:bg-red-50 rounded-lg font-medium transition-colors"
+            >
+              Cancel Booking
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Expandable Details */}
+      <AnimatePresence>
+        {showDetails && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="border-t border-gray-200"
+          >
+            <div className="p-6 bg-gray-50">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Payment Summary */}
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-3">Payment Summary</h4>
+                  <div className="space-y-3 bg-white rounded-lg border p-4">
+                    <SummaryRow label="Total Amount" value={s.totalAmount} />
+                    <SummaryRow label="Total Paid" value={s.totalPaid} status="paid" />
+                    {s.remaining > 0 ? (
+                      <SummaryRow label="Remaining Balance" value={s.remaining} status="pending" />
+                    ) : (
+                      <SummaryRow label="Payment Status" value="Completed" status="completed" />
+                    )}
+                  </div>
+                </div>
+
+                {/* Payment History */}
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-3">Payment History</h4>
+                  {s.list.length === 0 ? (
+                    <div className="bg-white rounded-lg border p-4 text-center">
+                      <p className="text-gray-500 text-sm">No payments recorded yet</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {s.list.map((payment) => (
+                        <div key={payment.id} className="flex justify-between items-center p-3 bg-white rounded-lg border">
+                          <div className="flex items-center gap-3">
+                            <CheckCircle2 className="w-4 h-4 text-green-500" />
+                            <div>
+                              <p className="font-medium text-gray-900">₹{payment.amount}</p>
+                              <p className="text-sm text-gray-500">
+                                {new Date(payment.created_at).toLocaleDateString('en-IN', {
+                                  day: 'numeric',
+                                  month: 'short',
+                                  year: 'numeric'
+                                })}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-xs text-gray-500">
+                            {new Date(payment.created_at).toLocaleTimeString('en-IN', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+function InfoItem({ icon: Icon, label, value }) {
+  return (
+    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+      <Icon className="w-4 h-4 text-gray-600" />
+      <div>
+        <p className="text-xs text-gray-500">{label}</p>
+        <p className="font-medium text-gray-900">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function SummaryRow({ label, value, status = "default" }) {
+  const statusColors = {
+    default: "text-gray-900",
+    paid: "text-green-600",
+    pending: "text-amber-600",
+    completed: "text-green-600"
+  };
+
+  return (
+    <div className="flex justify-between items-center py-2">
+      <span className="text-gray-600">{label}</span>
+      <span className={`font-semibold ${statusColors[status]}`}>
+        {typeof value === "number" ? `₹${value}` : value}
+      </span>
+    </div>
+  );
+}
+
+

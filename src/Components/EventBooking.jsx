@@ -39,9 +39,7 @@ export default function EventBooking() {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  // ------------------------------------
   // SAVE BOOKING + INITIAL PAYMENT
-  // ------------------------------------
   const saveBookingAndPayment = async () => {
     if (!form.packageType) return alert("Please select a package");
     if (!form.paymentType) return alert("Please select payment type");
@@ -58,9 +56,7 @@ export default function EventBooking() {
     if (form.paymentType === "advance" && Number(form.amount) >= fullPrice)
       return alert("Advance cannot be equal or greater than full price");
 
-    // -------------------------------
-    // 1️⃣ Create booking only once
-    // -------------------------------
+    // 1️⃣ Create booking
     const { data: booking, error: bookingErr } = await supabase
       .from("bookings")
       .insert([
@@ -79,24 +75,25 @@ export default function EventBooking() {
 
     if (bookingErr) {
       console.error(bookingErr);
-      return alert("Booking could not be saved!");
+      alert("Booking could not be saved!");
+      return null;
     }
 
     const bookingId = booking.id;
 
-    // -------------------------------
-    // 2️⃣ Save FIRST PAYMENT into table
-    // -------------------------------
-    const { error: paymentErr } = await supabase.from("payments").insert([
+    // 2️⃣ Insert FIRST PAYMENT
+    const { error: paymentError } = await supabase.from("payments").insert([
       {
         booking_id: bookingId,
-        amount: Number(form.amount)
+        amount: Number(form.amount),
+        user_id: user.id
       }
     ]);
 
-    if (paymentErr) {
-      console.error(paymentErr);
-      return alert("Initial payment could not be saved!");
+    if (paymentError) {
+      console.error(paymentError);
+      alert("Initial payment could not be saved!");
+      return null;
     }
 
     return bookingId;
@@ -106,7 +103,6 @@ export default function EventBooking() {
     const bookingId = await saveBookingAndPayment();
     if (!bookingId) return;
 
-    // redirect to new payment page
     navigate(`/payments?booking_id=${bookingId}&amount=${form.amount}`);
   };
 
@@ -117,7 +113,6 @@ export default function EventBooking() {
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-lg bg-white/90 backdrop-blur-xl p-7 rounded-3xl shadow-xl border border-pink-200 relative"
       >
-        {/* BACK */}
         <button
           onClick={() => navigate(-1)}
           className="absolute top-4 left-4 p-2 bg-white/80 rounded-xl border shadow-sm"
@@ -197,7 +192,6 @@ export default function EventBooking() {
           {/* Payment Type */}
           <PaymentTypeSelector form={form} setForm={setForm} />
 
-          {/* Amount */}
           {form.paymentType && (
             <InputField
               icon={<IndianRupee size={18} className="text-pink-600" />}
@@ -296,5 +290,4 @@ function PaymentTypeSelector({ form, setForm }) {
     </div>
   );
 }
-
 
