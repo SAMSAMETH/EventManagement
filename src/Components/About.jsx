@@ -1,6 +1,6 @@
 // About.jsx
 import { motion } from "framer-motion";
-import aboutImg from "../assets/g4.jpg";
+import aboutImg from "../assets/g4_optimized.webp";
 
 export default function About() {
   return (

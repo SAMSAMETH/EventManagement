@@ -1,8 +1,7 @@
 // App.jsx
-// App.jsx
 import "./App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Toaster } from "react-hot-toast";
 import Navbar from "./Components/Navbar";
 import HomePage from "./Components/HomePage";
 import About from "./Components/About";
@@ -20,11 +19,19 @@ import Signin from "./pages/Signin";
 import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
 import ProtectedRoute from "./Auth/ProtectedRoute";
+import PaymentSuccess from "./pages/PaymentSuccess";
+import PaymentFailed from "./pages/PaymentFailed";
+
+/* ADMIN */
+import AdminDashboard from "./Admin/AdminDashboard";
+import { useAuth } from "./Auth/AuthContext";
 
 export default function App() {
+  const { user } = useAuth(); // MUST be inside component
+
   return (
       <div className="relative">
-
+    <Toaster position="top-center" />
         {/* NAVBAR */}
         <Navbar />
 
@@ -47,10 +54,9 @@ export default function App() {
         </a>
 
         {/* ROUTES */}
-       <main className="pt-4 sm:pt-6">
-
-
+        <main className="pt-4 sm:pt-6">
           <Routes>
+
             {/* HOME PAGE WITH ALL SECTIONS */}
             <Route
               path="/"
@@ -87,17 +93,19 @@ export default function App() {
               }
             />
 
-            {/* EVENT BOOKING SYSTEM PAGES */}
+            {/* EVENT BOOKING SYSTEM */}
             <Route path="/book-demo" element={<BookDemo />} />
             <Route path="/packages" element={<Packages />} />
             <Route path="/payments" element={<Payment />} />
             <Route path="/event-booking" element={<EventBooking />} />
 
-            {/* AUTH PAGES */}
+            {/* AUTH */}
             <Route path="/signin" element={<Signin />} />
             <Route path="/signup" element={<Signup />} />
+            <Route path="/payment-success" element={<PaymentSuccess />} />
+            <Route path="/payment-failed" element={<PaymentFailed />} />
 
-            {/* PROTECTED ROUTE EXAMPLE */}
+            {/* USER PROTECTED ROUTE */}
             <Route
               path="/dashboard"
               element={
@@ -106,9 +114,21 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-          </Routes>
 
+            {/* ADMIN PROTECTED ROUTE */}
+            <Route
+              path="/admin"
+              element={
+                user?.app_metadata?.role === "admin"
+                  ? <AdminDashboard />
+                  : <Navigate to="/" />
+              }
+            />
+
+          </Routes>
         </main>
       </div>
+
   );
 }
+

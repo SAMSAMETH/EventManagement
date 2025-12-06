@@ -9,6 +9,7 @@ export const useAuth = () => useContext(AuthContext);
 export default function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+   const [redirectPath, setRedirectPath] = useState(null);
 
   useEffect(() => {
     // 1️⃣ Load active session on refresh
@@ -39,7 +40,7 @@ export default function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, logout }}>
+    <AuthContext.Provider value={{ user, logout, loading, redirectPath, setRedirectPath }}>
       {!loading && children}
     </AuthContext.Provider>
   );

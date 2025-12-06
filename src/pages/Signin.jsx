@@ -1,11 +1,17 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { supabase } from "../supabase/supabaseClient";
 import { Eye, EyeOff, ArrowLeft } from "lucide-react";
+import { useAuth } from "../Auth/AuthContext";
+import toast from "react-hot-toast";
 
 export default function Signin() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { redirectPath, setRedirectPath } = useAuth();
+
+  const redirectTo = redirectPath || location.state?.from || "/event-booking";
 
   const [input, setInput] = useState({
     email: "",
@@ -13,160 +19,142 @@ export default function Signin() {
   });
 
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
+  // ------------------------
+  // EMAIL / PASSWORD LOGIN
+  // ------------------------
   const login = async (e) => {
     e.preventDefault();
+    setLoading(true);
 
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { error } = await supabase.auth.signInWithPassword({
       email: input.email.trim(),
       password: input.password,
     });
 
+    setLoading(false);
+
     if (error) {
-      alert("Invalid email or password");
+      toast.error("Invalid email or password");
       return;
     }
 
-    navigate("/dashboard");
+    toast.success("Login successful 🎉");
+    setTimeout(() => {
+      navigate(redirectTo);
+      setRedirectPath(null);
+    }, 800);
   };
 
+  // ------------------------
+  // GOOGLE LOGIN
+  // ------------------------
   const googleLogin = async () => {
+    toast.loading("Redirecting to Google…");
+    setRedirectPath(redirectTo);
+
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: "http://localhost:5173/dashboard",
+        redirectTo: window.location.origin,
       },
     });
   };
 
-  const resetPassword = async () => {
-    if (!input.email) return alert("Enter email to reset password");
-
-    const { error } = await supabase.auth.resetPasswordForEmail(input.email);
-
-    if (error) alert(error.message);
-    else alert("Password reset link sent to your email.");
-  };
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-pink-100 px-4 sm:px-6 py-8 sm:py-12">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 sm:p-6">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="bg-white p-6 sm:p-10 rounded-2xl sm:rounded-3xl shadow-lg sm:shadow-xl max-w-md w-full border border-pink-100 relative transform-gpu"
+        className="bg-white p-6 sm:p-10 shadow-2xl border border-gray-100 rounded-xl max-w-md w-full relative"
       >
-        {/* BACK BUTTON - Mobile & Desktop */}
-        <motion.button
-          onClick={() => navigate(-1)}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          className="absolute top-3 left-3 p-2 rounded-full text-gray-600 hover:text-pink-600 transition bg-white/90 backdrop-blur-sm border border-gray-200 shadow-sm lg:top-6 lg:left-6 lg:bg-transparent lg:border-none lg:shadow-none"
-          aria-label="Go back"
-        >
-          <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
-        </motion.button>
-
-        {/* HEADER - Mobile Adjusted */}
-        <div className="text-center mb-6 sm:mb-8 mt-2 sm:mt-0">
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-800">
-            Welcome <span className="text-pink-600">Back</span>
-          </h2>
-          <p className="text-sm text-gray-600 mt-2 hidden sm:block">
-            Sign in to your Zecardia.Events account
-          </p>
-        </div>
-
-        {/* LOGIN FORM - Mobile Optimized */}
-        <form className="space-y-4 sm:space-y-5" onSubmit={login} autoComplete="off">
-          {/* EMAIL */}
-          <div>
-            <label className="text-sm font-medium text-gray-700 block mb-1 sm:mb-2">Email</label>
-            <input
-              type="email"
-              value={input.email}
-              autoComplete="new-email"
-              onChange={(e) =>
-                setInput({ ...input, email: e.target.value })
-              }
-              className="w-full p-3 text-sm sm:text-base border border-gray-300 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none rounded-xl transition duration-150"
-              placeholder="Enter your email"
-              required
-            />
-          </div>
-
-          {/* PASSWORD */}
-          <div>
-            <label className="text-sm font-medium text-gray-700 block mb-1 sm:mb-2">Password</label>
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                value={input.password}
-                autoComplete="new-password"
-                onChange={(e) =>
-                  setInput({ ...input, password: e.target.value })
-                }
-                className="w-full p-3 text-sm sm:text-base border border-gray-300 focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 outline-none rounded-xl transition duration-150 pr-12"
-                placeholder="Enter your password"
-                required
-              />
-
-              {/* Password Toggle Button */}
-              <button
-                type="button"
-                className="absolute right-3 bottom-3 text-gray-500 hover:text-pink-600 transition"
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? <EyeOff size={18} className="sm:w-5 sm:h-5" /> : <Eye size={18} className="sm:w-5 sm:h-5" />}
-              </button>
-            </div>
-          </div>
-
-          {/* SIGN IN BTN */}
-          <motion.button
-            whileTap={{ scale: 0.98 }}
-            className="w-full bg-pink-600 text-white py-3 rounded-xl font-semibold text-sm sm:text-base shadow-md hover:bg-pink-700 transition duration-150 focus:ring-2 focus:ring-pink-500/20 focus:outline-none active:bg-pink-800"
-          >
-            Sign In
-          </motion.button>
-        </form>
-
-        {/* RESET PASSWORD */}
         <button
-          onClick={resetPassword}
-          className="text-xs sm:text-sm text-blue-600 mt-3 sm:mt-4 hover:underline w-full text-center block"
+          onClick={() => navigate(-1)}
+          className="absolute top-4 left-4 p-2 rounded-full text-gray-400 hover:bg-gray-100 transition duration-150"
         >
-          Forgot Password?
+          <ArrowLeft className="w-5 h-5" />
         </button>
 
-        {/* SEPARATOR */}
-        <div className="relative my-4 sm:my-6">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-300"></div>
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-white text-gray-500 text-xs sm:text-sm">Or continue with</span>
-          </div>
-        </div>
+        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 text-center mt-4">
+          Sign In to Your Workspace
+        </h2>
+        <p className="text-center text-sm sm:text-base text-gray-500 mt-2 mb-8">
+          Welcome back! Please enter your credentials.
+        </p>
 
-        {/* GOOGLE LOGIN - Mobile Optimized */}
+        {/* GOOGLE LOGIN BUTTON */}
         <button
           onClick={googleLogin}
-          className="w-full flex justify-center items-center gap-3 border border-gray-300 py-3 rounded-xl font-medium hover:bg-gray-50 transition duration-150 shadow-sm focus:ring-2 focus:ring-gray-500/20 focus:outline-none active:bg-gray-100 text-sm sm:text-base"
+          className="w-full mb-6 border border-gray-300 py-3 rounded-lg flex justify-center items-center gap-3 text-sm sm:text-base font-medium text-gray-700 hover:bg-gray-50 transition duration-150 active:bg-gray-100"
         >
           <img
-            src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
-            className="w-4 h-4 sm:w-5 sm:h-5"
-            alt="Google logo"
+            src="https://www.svgrepo.com/show/475656/google-color.svg"
+            alt="Google Logo"
+            className="w-5 h-5"
           />
-          Continue with Google
+          Sign in with Google
         </button>
 
-        {/* SIGN UP LINK - Mobile Adjusted */}
-        <p className="text-center mt-4 sm:mt-6 text-xs sm:text-sm text-gray-600">
+        <div className="flex items-center mb-6">
+          <div className="flex-grow border-t border-gray-200"></div>
+          <span className="mx-4 text-gray-400 text-xs font-medium uppercase tracking-wider">
+            OR
+          </span>
+          <div className="flex-grow border-t border-gray-200"></div>
+        </div>
+
+        {/* EMAIL / PASSWORD FORM */}
+        <form onSubmit={login} className="space-y-5">
+          <input type="text" style={{ display: "none" }} autoComplete="off" />
+          <input type="password" style={{ display: "none" }} autoComplete="off" />
+
+          <Input
+            label="Email Address"
+            type="email"
+            autoComplete="off"
+            value={input.email}
+            onChange={(e) => setInput({ ...input, email: e.target.value })}
+          />
+
+          <PasswordField
+            label="Password"
+            show={showPassword}
+            toggle={() => setShowPassword(!showPassword)}
+            autoComplete="new-password"
+            value={input.password}
+            onChange={(e) => setInput({ ...input, password: e.target.value })}
+          />
+
+          {/* SIGN IN BUTTON WITH SPINNER */}
+          <button
+            type="submit"
+            disabled={loading}
+            className={`w-full py-3 text-sm sm:text-base font-semibold rounded-lg transition duration-300
+              ${
+                loading
+                  ? "bg-pink-400 cursor-not-allowed"
+                  : "bg-pink-600 text-white hover:bg-pink-700 shadow-md"
+              }`}
+          >
+            {loading ? (
+              <div className="flex justify-center items-center gap-2">
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Signing In...
+              </div>
+            ) : (
+              "Sign In"
+            )}
+          </button>
+        </form>
+
+        <p className="text-center mt-6 text-xs sm:text-sm text-gray-600">
           Don't have an account?
-          <Link to="/signup" className="text-pink-600 font-semibold hover:text-pink-700 transition ml-1">
-            Create one
+          <Link
+            to="/signup"
+            className="text-pink-600 ml-1 font-semibold hover:text-pink-700"
+          >
+            Create an account
           </Link>
         </p>
       </motion.div>
@@ -174,3 +162,42 @@ export default function Signin() {
   );
 }
 
+// INPUT COMPONENT
+function Input({ label, ...props }) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label}
+      </label>
+      <input
+        {...props}
+        className="w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-pink-500"
+      />
+    </div>
+  );
+}
+
+// PASSWORD FIELD COMPONENT
+function PasswordField({ label, show, toggle, ...props }) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          type={show ? "text" : "password"}
+          {...props}
+          className="w-full p-3 border border-gray-300 rounded-lg pr-10 shadow-sm focus:ring-2 focus:ring-pink-500"
+        />
+        <button
+          type="button"
+          onClick={toggle}
+          className="absolute inset-y-0 right-3 text-gray-400 hover:text-gray-600"
+        >
+          {show ? <EyeOff /> : <Eye />}
+        </button>
+      </div>
+    </div>
+  );
+}

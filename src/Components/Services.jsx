@@ -1,10 +1,10 @@
 // ServicesSection.jsx
 import { motion } from "framer-motion";
 import { Sparkles, Camera, Utensils, Flower } from "lucide-react";
-import decoImg from "../assets/s-deco.jpg";
-import cateringImg from "../assets/s-catering.jpg";
-import photoImg from "../assets/s-photo.jpg";
-import planningImg from "../assets/s-planning.jpg";
+import decoImg from "../assets/s-deco_optimized.webp";
+import cateringImg from "../assets/catering_optimized.webp";
+import photoImg from "../assets/s-photo.webp";
+import planningImg from "../assets/s-planning.webp";
 
 export default function Services() {
   const services = [
