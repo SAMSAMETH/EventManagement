@@ -1,5 +1,5 @@
 import g1 from "../assets/wedding_optimized.webp";
-import g2 from "../assets/weddingPhotography.avif";
+import g2 from "../assets/WeddingPhotography.avif";
 import g3 from "../assets/g3_optimized.webp";
 import g4 from "../assets/g4_optimized.webp";
 import g5 from "../assets/WeddingDeco.png";
